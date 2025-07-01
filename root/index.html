@@ -1,23 +1,4 @@
 <!DOCTYPE html>
-
-<!-- <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Point Cloud Viewer</title>
-  <style>
-    body, html { margin: 0; padding: 0; overflow: hidden; }
-    canvas { display: block; width: 100vw; height: 100vh; }
-  </style>
-</head>
-<body>
-  <canvas id="glcanvas"></canvas>
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
-  <script type="module" src="js/app.js"></script>
-</body>
-</html> -->
-
-<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -40,7 +21,6 @@
       width: 100%;
       height: 100%;
     }
-
 
     /* Virtual Controls Container */
     .virtual-controls {
@@ -93,6 +73,7 @@
       cursor: pointer;
       transition: background 0.1s ease;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      touch-action: none;
     }
 
     .joystick-knob:active {
@@ -137,6 +118,7 @@
       backdrop-filter: blur(10px);
       transition: all 0.1s ease;
       user-select: none;
+      touch-action: manipulation;
     }
 
     .wasd-btn:hover, .ijkl-btn:hover {
@@ -175,6 +157,7 @@
       cursor: pointer;
       backdrop-filter: blur(10px);
       font-size: 14px;
+      touch-action: manipulation;
     }
 
     .toggle-controls:hover {
@@ -185,40 +168,57 @@
     .virtual-controls-right.hidden {
       display: none;
     }
+
+    /* Multi-touch indicator */
+    .touch-indicator {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      z-index: 1001;
+      color: white;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 12px;
+      backdrop-filter: blur(10px);
+    }
   </style>
 </head>
 <body>
   <canvas id="glcanvas"></canvas>
   
+  <!-- Multi-touch indicator -->
+  <div class="touch-indicator" id="touchIndicator">Touches: 0</div>
+  
   <!-- Virtual Controls Left (WASD) -->
   <div class="virtual-controls" id="virtualControls">
     <!-- Joystick -->
-    <div class="joystick-container">
+    <div class="joystick-container" data-joystick="left">
       <div class="joystick-base"></div>
       <div class="joystick-knob" id="joystickKnob"></div>
     </div>
     
     <!-- WASD Buttons -->
-    <div class="wasd-container">
+    <!-- <div class="wasd-container">
       <button class="wasd-btn" data-key="w">W</button>
       <button class="wasd-btn" data-key="a">A</button>
       <button class="wasd-btn" data-key="s">S</button>
       <button class="wasd-btn" data-key="d">D</button>
-    </div>
+    </div> -->
   </div>
 
   <!-- Virtual Controls Right (IJKL) -->
   <div class="virtual-controls-right" id="virtualControlsRight">
     <!-- IJKL Buttons -->
-    <div class="ijkl-container">
+    <!-- <div class="ijkl-container">
       <button class="ijkl-btn" data-key="i">I</button>
       <button class="ijkl-btn" data-key="j">J</button>
       <button class="ijkl-btn" data-key="k">K</button>
       <button class="ijkl-btn" data-key="l">L</button>
-    </div>
+    </div> -->
     
     <!-- Right Joystick -->
-    <div class="joystick-container">
+    <div class="joystick-container" data-joystick="right">
       <div class="joystick-base"></div>
       <div class="joystick-knob" id="joystickKnobRight"></div>
     </div>
@@ -231,76 +231,126 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
   
   <script>
-    // Virtual Controls Handler
+    // Multi-touch Virtual Controls Handler
     class VirtualControls {
       constructor() {
         this.activeKeys = new Set();
+        this.activeTouches = new Map(); // Track touch IDs and their associated joysticks
         
-        // Left joystick (WASD)
-        this.leftJoystickActive = false;
+        // Joystick elements
         this.leftJoystickKnob = document.getElementById('joystickKnob');
-        this.leftJoystickContainer = document.querySelector('.virtual-controls .joystick-container');
-        
-        // Right joystick (IJKL)
-        this.rightJoystickActive = false;
+        this.leftJoystickContainer = document.querySelector('[data-joystick="left"]');
         this.rightJoystickKnob = document.getElementById('joystickKnobRight');
-        this.rightJoystickContainer = document.querySelector('.virtual-controls-right .joystick-container');
+        this.rightJoystickContainer = document.querySelector('[data-joystick="right"]');
         
-        this.initializeLeftJoystick();
-        this.initializeRightJoystick();
-        this.initializeWASDButtons();
-        this.initializeIJKLButtons();
+        // Touch indicator
+        this.touchIndicator = document.getElementById('touchIndicator');
+        
+        // Initialize all controls
+        this.initializeJoysticks();
+        this.initializeButtons();
         this.initializeToggle();
+        
+        // Prevent default touch behaviors
+        document.addEventListener('touchstart', (e) => {
+          // Only prevent default if touching control elements
+          if (this.isTouchingControls(e.target)) {
+            e.preventDefault();
+          }
+        }, { passive: false });
+        
+        document.addEventListener('touchmove', (e) => {
+          if (this.activeTouches.size > 0) {
+            e.preventDefault();
+          }
+        }, { passive: false });
       }
 
-      initializeLeftJoystick() {
-        this.initializeJoystick(
-          this.leftJoystickContainer,
-          this.leftJoystickKnob,
-          'left',
-          ['w', 'a', 's', 'd']
-        );
+      isTouchingControls(element) {
+        return element.closest('.virtual-controls') || 
+               element.closest('.virtual-controls-right') ||
+               element.closest('.toggle-controls');
       }
 
-      initializeRightJoystick() {
-        this.initializeJoystick(
-          this.rightJoystickContainer,
-          this.rightJoystickKnob,
-          'right',
-          ['i', 'j', 'k', 'l']
-        );
+      initializeJoysticks() {
+        // Use unified touch event handlers for both joysticks
+        document.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
+        document.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
+        document.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: false });
+        document.addEventListener('touchcancel', (e) => this.handleTouchEnd(e), { passive: false });
+        
+        // Mouse support for desktop testing
+        this.leftJoystickKnob.addEventListener('mousedown', (e) => this.startMouseJoystick(e, 'left'));
+        this.rightJoystickKnob.addEventListener('mousedown', (e) => this.startMouseJoystick(e, 'right'));
+        document.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+        document.addEventListener('mouseup', (e) => this.handleMouseUp(e));
+        
+        this.mouseJoystick = null;
       }
 
-      initializeJoystick(container, knob, side, keys) {
-        // Mouse events
-        knob.addEventListener('mousedown', (e) => this.startJoystick(e, side));
-        document.addEventListener('mousemove', (e) => this.moveJoystick(e, side, container, knob, keys));
-        document.addEventListener('mouseup', (e) => this.endJoystick(e, side, knob, keys));
-
-        // Touch events
-        knob.addEventListener('touchstart', (e) => this.startJoystick(e, side), { passive: false });
-        document.addEventListener('touchmove', (e) => this.moveJoystick(e, side, container, knob, keys), { passive: false });
-        document.addEventListener('touchend', (e) => this.endJoystick(e, side, knob, keys));
+      handleTouchStart(e) {
+        for (let touch of e.changedTouches) {
+          const element = document.elementFromPoint(touch.clientX, touch.clientY);
+          const joystickContainer = element?.closest('.joystick-container');
+          
+          if (joystickContainer) {
+            const joystickType = joystickContainer.dataset.joystick;
+            this.activeTouches.set(touch.identifier, {
+              type: joystickType,
+              container: joystickContainer,
+              knob: joystickType === 'left' ? this.leftJoystickKnob : this.rightJoystickKnob,
+              keys: joystickType === 'left' ? ['w', 'a', 's', 'd'] : ['i', 'j', 'k', 'l']
+            });
+          }
+        }
+        this.updateTouchIndicator();
       }
 
-      startJoystick(e, side) {
-        e.preventDefault();
-        if (side === 'left') {
-          this.leftJoystickActive = true;
-        } else {
-          this.rightJoystickActive = true;
+      handleTouchMove(e) {
+        for (let touch of e.changedTouches) {
+          const joystickData = this.activeTouches.get(touch.identifier);
+          if (joystickData) {
+            this.updateJoystickPosition(touch.clientX, touch.clientY, joystickData);
+          }
         }
       }
 
-      moveJoystick(e, side, container, knob, keys) {
-        const isActive = side === 'left' ? this.leftJoystickActive : this.rightJoystickActive;
-        if (!isActive) return;
-        
+      handleTouchEnd(e) {
+        for (let touch of e.changedTouches) {
+          const joystickData = this.activeTouches.get(touch.identifier);
+          if (joystickData) {
+            this.resetJoystick(joystickData);
+            this.activeTouches.delete(touch.identifier);
+          }
+        }
+        this.updateTouchIndicator();
+      }
+
+      startMouseJoystick(e, side) {
         e.preventDefault();
-        const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-        const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-        
-        const containerRect = container.getBoundingClientRect();
+        this.mouseJoystick = {
+          type: side,
+          container: side === 'left' ? this.leftJoystickContainer : this.rightJoystickContainer,
+          knob: side === 'left' ? this.leftJoystickKnob : this.rightJoystickKnob,
+          keys: side === 'left' ? ['w', 'a', 's', 'd'] : ['i', 'j', 'k', 'l']
+        };
+      }
+
+      handleMouseMove(e) {
+        if (this.mouseJoystick) {
+          this.updateJoystickPosition(e.clientX, e.clientY, this.mouseJoystick);
+        }
+      }
+
+      handleMouseUp(e) {
+        if (this.mouseJoystick) {
+          this.resetJoystick(this.mouseJoystick);
+          this.mouseJoystick = null;
+        }
+      }
+
+      updateJoystickPosition(clientX, clientY, joystickData) {
+        const containerRect = joystickData.container.getBoundingClientRect();
         const centerX = containerRect.left + containerRect.width / 2;
         const centerY = containerRect.top + containerRect.height / 2;
         
@@ -317,32 +367,21 @@
           y = (deltaY / distance) * maxDistance;
         }
         
-        knob.style.transform = `translate(${x}px, ${y}px)`;
+        joystickData.knob.style.transform = `translate(${x}px, ${y}px)`;
         
         // Convert to key commands
-        this.updateKeysFromJoystick(x, y, keys, side);
+        this.updateKeysFromJoystick(x, y, joystickData.keys, joystickData.type);
       }
 
-      endJoystick(e, side, knob, keys) {
-        const isActive = side === 'left' ? this.leftJoystickActive : this.rightJoystickActive;
-        if (!isActive) return;
-        
-        if (side === 'left') {
-          this.leftJoystickActive = false;
-        } else {
-          this.rightJoystickActive = false;
-        }
-        
-        knob.style.transform = 'translate(-50%, -50%)';
-        
-        // Clear all joystick-generated keys for this side
-        this.clearJoystickKeys(keys);
+      resetJoystick(joystickData) {
+        joystickData.knob.style.transform = 'translate(-50%, -50%)';
+        this.clearJoystickKeys(joystickData.keys);
       }
 
-      updateKeysFromJoystick(x, y, keys, side) {
+      updateKeysFromJoystick(x, y, keys, joystickType) {
         const threshold = 15;
         
-        // Clear previous joystick keys for this side
+        // Clear previous joystick keys for this specific joystick
         this.clearJoystickKeys(keys);
         
         // Add new keys based on position
@@ -358,7 +397,6 @@
       }
 
       clearJoystickKeys(keys) {
-        // Only clear keys that were set by this joystick
         keys.forEach(key => {
           if (this.activeKeys.has(key)) {
             this.simulateKeyRelease(key);
@@ -366,16 +404,8 @@
         });
       }
 
-      initializeWASDButtons() {
-        this.initializeButtons('.wasd-btn');
-      }
-
-      initializeIJKLButtons() {
-        this.initializeButtons('.ijkl-btn');
-      }
-
-      initializeButtons(selector) {
-        const buttons = document.querySelectorAll(selector);
+      initializeButtons() {
+        const buttons = document.querySelectorAll('.wasd-btn, .ijkl-btn');
         
         buttons.forEach(btn => {
           const key = btn.dataset.key;
@@ -409,6 +439,12 @@
             this.simulateKeyRelease(key);
             btn.classList.remove('pressed');
           });
+          
+          btn.addEventListener('touchcancel', (e) => {
+            e.preventDefault();
+            this.simulateKeyRelease(key);
+            btn.classList.remove('pressed');
+          });
         });
       }
 
@@ -423,6 +459,10 @@
           toggleBtn.textContent = leftControls.classList.contains('hidden') ? 
             'Show Controls' : 'Hide Controls';
         });
+      }
+
+      updateTouchIndicator() {
+        this.touchIndicator.textContent = `Touches: ${this.activeTouches.size}`;
       }
 
       simulateKeyPress(key) {
