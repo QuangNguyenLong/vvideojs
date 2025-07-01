@@ -1,4 +1,4 @@
-let camera = { position: [50, 500, 1500], pitch: 0, yaw: 0, moveSpeed: 10, rotateSpeed: 0.001 };
+let camera = { position: [50, 500, 1500], pitch: 0, yaw: 0, moveSpeed: 7, rotateSpeed: 0.001 };
 let keys = {};
 
 export function handleKeyDown(event) {
@@ -23,7 +23,7 @@ export function handleMouseMove(event) {
 
 export function updateCamera() {
     // Rotation speed
-    const rotateTimes = 10;
+    const rotateTimes = 5;
 
     // Handle rotation input
     if (keys['i']) {

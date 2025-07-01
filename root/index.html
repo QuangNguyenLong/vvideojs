@@ -143,12 +143,17 @@
     .ijkl-btn[data-key="k"] { grid-area: k; }
     .ijkl-btn[data-key="l"] { grid-area: l; }
 
-    /* Toggle button */
-    .toggle-controls {
+    /* Control buttons */
+    .control-buttons {
       position: fixed;
       top: 20px;
       right: 20px;
       z-index: 1001;
+      display: flex;
+      gap: 10px;
+    }
+
+    .toggle-controls, .replay-btn {
       padding: 10px 15px;
       background: rgba(255, 255, 255, 0.1);
       border: 2px solid rgba(255, 255, 255, 0.3);
@@ -158,10 +163,27 @@
       backdrop-filter: blur(10px);
       font-size: 14px;
       touch-action: manipulation;
+      transition: all 0.2s ease;
     }
 
-    .toggle-controls:hover {
+    .toggle-controls:hover, .replay-btn:hover {
       background: rgba(255, 255, 255, 0.2);
+      border-color: rgba(255, 255, 255, 0.5);
+      transform: translateY(-1px);
+    }
+
+    .replay-btn {
+      background: rgba(255, 100, 100, 0.15);
+      border-color: rgba(255, 100, 100, 0.4);
+    }
+
+    .replay-btn:hover {
+      background: rgba(255, 100, 100, 0.25);
+      border-color: rgba(255, 100, 100, 0.6);
+    }
+
+    .replay-btn:active {
+      transform: scale(0.95);
     }
 
     .virtual-controls.hidden,
@@ -224,8 +246,11 @@
     </div>
   </div>
 
-  <!-- Toggle Button -->
-  <button class="toggle-controls" id="toggleControls">Hide Controls</button>
+  <!-- Control Buttons -->
+  <div class="control-buttons">
+    <button class="toggle-controls" id="toggleControls">Hide Controls</button>
+    <button class="replay-btn" id="replayBtn">🔄 Replay</button>
+  </div>
 
   <!-- Scripts -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
@@ -450,14 +475,27 @@
 
       initializeToggle() {
         const toggleBtn = document.getElementById('toggleControls');
+        const replayBtn = document.getElementById('replayBtn');
         const leftControls = document.getElementById('virtualControls');
         const rightControls = document.getElementById('virtualControlsRight');
         
+        // Toggle controls visibility
         toggleBtn.addEventListener('click', () => {
           leftControls.classList.toggle('hidden');
           rightControls.classList.toggle('hidden');
           toggleBtn.textContent = leftControls.classList.contains('hidden') ? 
             'Show Controls' : 'Hide Controls';
+        });
+
+        // Replay button - properly reloads the entire page
+        replayBtn.addEventListener('click', () => {
+          replayBtn.textContent = '🔄 Reloading...';
+          replayBtn.disabled = true;
+          
+          // Add a small delay for visual feedback, then reload the entire page
+          setTimeout(() => {
+            window.location.reload();
+          }, 300);
         });
       }
 
